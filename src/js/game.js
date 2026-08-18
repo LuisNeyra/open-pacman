@@ -13,6 +13,12 @@ const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
 const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
 const GHOST_SPEED = 0.1;    // 1/10 celda/frame
 
+// IA de fantasmas — constantes por kind
+const AMBUSH_AHEAD = 4;            // celdas delante de Pac-Man (rosa)
+const FLANK_AHEAD = 2;             // base del objetivo del cian
+const FLANK_REF_KIND = 'hunter';   // fantasma de referencia del flanqueo
+const ERRATIC_CHASE_RANGE = 8;     // distancia Manhattan (naranja)
+
 // Crea una partida nueva. Copia MAZE (pristino) a game.grid para poder comer
 // dots sin destruir el original, y reiniciar.
 function createGame() {
@@ -120,16 +126,46 @@ function decideGhost( game, g ) {
   // Sin salida (callejon): permitir el giro de 180.
   const choices = options.length ? options : [ '' + OPPOSITE[ g.dir ] ];
 
+  const px = Math.round( p.x );
+  const py = Math.round( p.y );
+
+  let tx, ty;
+
   if ( g.kind === 'hunter' ) {
-    const px = Math.round( p.x );
-    const py = Math.round( p.y );
+    tx = px;
+    ty = py;
+  } else if ( g.kind === 'ambusher' ) {
+    const dirVec = DIRS[ p.dir ];
+    tx = px + dirVec.x * AMBUSH_AHEAD;
+    ty = py + dirVec.y * AMBUSH_AHEAD;
+  } else if ( g.kind === 'flanker' ) {
+    const dirVec = DIRS[ p.dir ];
+    const ax = px + dirVec.x * FLANK_AHEAD;
+    const ay = py + dirVec.y * FLANK_AHEAD;
+    const ref = game.ghosts.find( ( h ) => h.kind === FLANK_REF_KIND );
+    if ( ref ) {
+      tx = ax + ( ax - Math.round( ref.x ) );
+      ty = ay + ( ay - Math.round( ref.y ) );
+    } else {
+      tx = ax;
+      ty = ay;
+    }
+  } else if ( g.kind === 'erratic' ) {
+    const dist = Math.abs( px - g.x ) + Math.abs( py - g.y );
+    if ( dist > ERRATIC_CHASE_RANGE ) {
+      tx = px;
+      ty = py;
+    }
+  }
+
+  if ( tx !== undefined && ty !== undefined ) {
     let best = choices[ 0 ];
     let bestDist = Infinity;
     for ( const dir of choices ) {
       const d = DIRS[ dir ];
       const nx = g.x + d.x;
       const ny = g.y + d.y;
-      const dist = Math.abs( nx - px ) + Math.abs( ny - py );
+      const dist = Math.abs( nx - tx ) + Math.abs( ny - ty );
       if ( dist < bestDist ) {
         bestDist = dist;
         best = dir;
